@@ -7,6 +7,7 @@ if platform.system() == 'Linux':
 	SEP = "/"
 	CODE_DIR = "/bioseq/crista/CRISTA_online/"
 	PLANTS_MAPPING_FILE = "/bioseq/crista/CRISTA_online/plants_names_mapping.csv"
+	REFSEQ_MAPPING_FILE = "/bioseq/crista/CRISTA_online/refseq_genome_index.csv"
 	DATA_DIR = "/groups/itay_mayrose/shiranabad/CRISPR/data/"
 	OUTPUT_DIR = "/groups/itay_mayrose/shiranabad/CRISPR/output/"
 	CACHE_DIR = "/groups/itay_mayrose/shiranabad/CRISPR/data/URLcache/"

@@ -241,7 +241,7 @@ def predict_on_df(features_mat, include_genomic_features, w_flanking, logger=Non
 	return final_pred_df
 
 
-def update_output_html(sgrna=None, dna=None, score=None, output_df=None, logger=None):
+def update_output_html(sgrna=None, dna=None, score=None, output_df=None, logger=None, isDailyTest=False):
 
 	html_path = RESULTS_PATH + "/output.php"
 
@@ -286,15 +286,26 @@ def update_output_html(sgrna=None, dna=None, score=None, output_df=None, logger=
 		fpw.flush()
 
 	#send email
-	web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	if not isDailyTest:
+		web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	else:
+		web_utils.write_daily_test('crista_pair_score', RUN_NUMBER, 'PASS')
 
 
 
-def check_input_vars(rna_seq, extended100_genomic_seq, genome_database, cell_type, chromosome, strand, start_position):
+def check_input_vars(rna_seq, extended100_genomic_seq, genome_database, cell_type, chromosome, strand, start_position, index_name=""):
 
 	global EXTENSION, ERROR_MESSAGE_ON_EXCEPTION
+	prefix = ""
+	if index_name != "":
+		prefix = "In line indexed as {}: ".format(index_name)
 
+	if len(rna_seq) == 23 and rna_seq.upper().endswith("GG"):
+		rna_seq = rna_seq[:-3]
+		add_warning_message(prefix + "The RNA seq was truncated to 20nt (the NGG end was deleted)")
+	rna_seq = re.sub("U", "T", rna_seq.upper())
 	rna_seq = rna_seq.upper() + "NGG"
+
 
 	end_position = include_genomic_features = w_flanking = None
 
@@ -306,11 +317,11 @@ def check_input_vars(rna_seq, extended100_genomic_seq, genome_database, cell_typ
 		w_flanking = len_extended==223
 		if w_flanking:
 			if not (len(re.search("[AGCT]+", extended100_genomic_seq).group()) == 223):
-				add_warning_message("DNA sequence must be ACGT only of length 223")
+				add_warning_message(prefix + "In line indexed {}: DNA sequence must be ACGT only of length 223")
 				return #error
 		else:
 			if not (len(re.search("[AGCT]+", extended100_genomic_seq).group()) == 29):
-				add_warning_message("DNA sequence must be ACGT only of length 29")
+				add_warning_message(prefix + "In line indexed {}: DNA sequence must be ACGT only of length 29")
 				return #error
 			EXTENSION = 3
 
@@ -349,11 +360,11 @@ def check_input_vars(rna_seq, extended100_genomic_seq, genome_database, cell_typ
 			chromosome = None #because we use the model without genomic features
 
 	if not isinstance(rna_seq, str):
-		add_warning_message("RNA input is not a sequence")
+		add_warning_message(prefix + "In line indexed {}: RNA input is not a sequence")
 		return #error
 	rna_seq = rna_seq.upper()
 	if not len(re.search("[AGCTU]+", rna_seq).group()) == 20:
-		add_warning_message("sgRNA sequence must be ACGTU only")
+		add_warning_message(prefix + "In line indexed {}: sgRNA sequence must be ACGTU only")
 		return #error
 	if 'U' in rna_seq:
 		rna_seq = rna_seq.replace('U', 'T')
@@ -391,7 +402,7 @@ def parse_input_file(file):
 				res = check_input_vars(rna_seq=row[1], extended100_genomic_seq=row[2],
 					                 genome_database=None, cell_type=None,
 					                 chromosome=None, strand=None,
-					                 start_position=None)
+					                 start_position=None, index_name=row[0])
 				if res is not None:
 					rna_seq, dna_seq, extended100_genomic_seq, genome_database, cell_type, chromosome, \
 					strand, start_position, end_position, include_genomic_features, w_flanking =\
@@ -402,7 +413,7 @@ def parse_input_file(file):
 				res = check_input_vars(rna_seq=row[1], extended100_genomic_seq=None,
 					                 genome_database=row[2], cell_type=row[3],
 					                 chromosome=row[4], strand=row[5],
-					                 start_position=row[6])
+					                 start_position=row[6], index_name=row[0])
 
 				if res is not None:
 					rna_seq, dna_seq, extended100_genomic_seq, genome_database, cell_type, chromosome, \
@@ -437,6 +448,7 @@ if __name__ == '__main__':
 	parser.add_argument('--start_position', '-a', default=None)
 	parser.add_argument('--path', '-p', default=None)
 	parser.add_argument('--run_number', '-n', default=None)
+	parser.add_argument('--daily_test', action='store_true')
 
 	args = parser.parse_args()
 
@@ -448,13 +460,14 @@ if __name__ == '__main__':
 	RECIPIENT = web_utils.get_email_recipient(RESULTS_PATH)
 
 	try:
-		web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		if not args.daily_test:
+			web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
 		input_file = args.file
 		if input_file is not None:
 			input_ids, features_mat, include_genomic_features, w_flanking = parse_input_file(input_file)
 			score_df = predict_on_df(features_mat, include_genomic_features, w_flanking)
 			input_ids["CRISTA prediction"] = score_df
-			update_output_html(output_df=input_ids, logger=logger)
+			update_output_html(output_df=input_ids, logger=logger, isDailyTest=args.daily_test)
 
 		else:
 			res = check_input_vars(rna_seq=args.sgseq, extended100_genomic_seq=args.extended100_genomic_seq,
@@ -471,11 +484,14 @@ if __name__ == '__main__':
 			features = get_features(rna_seq, dna_seq, extended100_genomic_seq, genome_database, cell_type, chromosome, strand, start_position, end_position, include_genomic_features, w_flanking=w_flanking)
 			features_mat = np.asmatrix(features)
 			score_df = predict_on_df(features_mat, include_genomic_features, w_flanking, logger)
-			update_output_html(sgrna=rna_seq, dna=dna_seq, score=score_df.iloc[0]["CRISTA score"], logger=logger)
+			update_output_html(sgrna=rna_seq, dna=dna_seq, score=score_df.iloc[0]["CRISTA score"], logger=logger, isDailyTest=args.daily_test)
 	except:
 		exc_type, exc_value, exc_traceback = sys.exc_info()
 		traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
-		web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger)
+		if not args.daily_test: 
+			web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger)
+		else: 
+			web_utils.write_daily_test('crista_pair_score', RUN_NUMBER, 'FAIL')
 		web_utils.send_error_email("shiranos@gmail.com", RUN_NUMBER, logger)
 		web_utils.load_error_page(RESULTS_PATH, get_error_message())
 

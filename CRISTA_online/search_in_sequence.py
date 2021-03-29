@@ -81,7 +81,7 @@ def get_seq_from_gene(gene_annotation):
 	pass
 
 
-def update_output_html(output_df, results_df, logger):
+def update_output_html(output_df, results_df, logger, isDailyTest=False):
 	filename = "CRISTA_offtargets_scores{0}.csv".format(RUN_NUMBER)
 	output_df.to_csv(RESULTS_PATH + "/" + filename)
 	html_addition = "<a href=\"" + filename + "\" download>Download results with full features values</a>\n"  # ref to file
@@ -102,7 +102,13 @@ def update_output_html(output_df, results_df, logger):
 					 "<br><br>\n"
 	web_utils.add_to_results_html(RESULTS_PATH, html_addition)
 	web_utils.add_table_to_html_results_page(RESULTS_PATH, results_df, True)
-	web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	
+	#send email
+	if not isDailyTest:
+		web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	else:
+		web_utils.write_daily_test('crista_in_sequence', RUN_NUMBER, 'PASS')
+		
 
 
 if __name__ == '__main__':
@@ -145,6 +151,7 @@ if __name__ == '__main__':
 	#parser.add_argument('--cell_type', '-e', default=None)
 	parser.add_argument('--path', '-p', default=None)
 	parser.add_argument('--run_number', '-n', default=None)
+	parser.add_argument('--daily_test', action='store_true')
 
 	args = parser.parse_args()
 	global RESULTS_PATH
@@ -155,7 +162,8 @@ if __name__ == '__main__':
 	RECIPIENT = web_utils.get_email_recipient(RESULTS_PATH)
 
 	try:
-		web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		if not args.daily_test:
+			web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
 		with open(args.genomic_seq_file) as fpr:
 			genomic_seq = fpr.read().strip().upper()
 		data_df, features_mat = get_targets_features(genomic_seq)
@@ -169,12 +177,15 @@ if __name__ == '__main__':
 		convert_pos_cols_to_int(results_df)
 
 		#main.update_output_html(output_df=all_df)
-		update_output_html(all_df, results_df, logger)
+		update_output_html(all_df, results_df, logger, isDailyTest=args.daily_test)
 
 	except:
 		exc_type, exc_value, exc_traceback = sys.exc_info()
 		traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
-		web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		if not args.daily_test: 
+			web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		else: 
+			web_utils.write_daily_test('crista_in_sequence', RUN_NUMBER, 'FAIL')
 		web_utils.send_error_email("shiranos@gmail.com", RUN_NUMBER, logger)
 		web_utils.load_error_page(RESULTS_PATH, get_error_message())
 	web_utils.stop_refreshing(RESULTS_PATH)

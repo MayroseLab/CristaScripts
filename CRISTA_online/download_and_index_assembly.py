@@ -76,6 +76,14 @@ def get_download_url_from_ucsc(assembly_name):
 	return UCSC_DB_PAGE.format(assembly_name)
 
 
+def get_download_url_from_refseq_genomes(assembly_name):
+	df_index = pd.read_csv(REFSEQ_MAPPING_FILE, index_col=None)
+	mask = df_index["assembly name"] == assembly_name
+	if mask.sum() > 0:
+		ftp_url = df_index.loc[mask, "url"].values[0]
+		return ftp_url
+
+
 def plant_assembly_name(assembly_name):
 	"""
 	checks if assembly is PLANTS. if so, returns the assembly nanem, else returns False
@@ -98,14 +106,17 @@ def download_assembly(assembly_name, assembly_dirpath):
 	tries = 1
 
 	plant_name = plant_assembly_name(assembly_name)
+	refseq_path = get_download_url_from_refseq_genomes(assembly_name)
 
-	if plant_name is None:
+	if refseq_path is not None:
+		url_for_assembly_file = refseq_path
+	elif plant_name is None:
 		url_for_assembly_file = get_download_url_from_ucsc(assembly_name)
 	else:
 		url_for_assembly_file = get_download_url_from_ensemble_plants(plant_name, assembly_dirpath)
 
-	print(url_for_assembly_file)
-	file_suffix = re.search("\.(fa.*)|(2bit)$", url_for_assembly_file.split(SEP)[-1]).group()
+	file_suffix = re.search("\.((fa.*)|(2bit)|(fna.*))$", url_for_assembly_file.split(SEP)[-1]).group()
+	file_suffix = re.sub("fna", "fa", file_suffix)
 	fa_file = assembly_dirpath + assembly_name + ".fa"
 	downloaded_file = assembly_dirpath + assembly_name
 	max_tries = 10
@@ -130,7 +141,7 @@ def download_assembly(assembly_name, assembly_dirpath):
 			# transform twobit to fa.gz
 			os.system(TWOBITTOFA_EXE + " " + downloaded_file + file_suffix + " " + fa_file)
 			os.remove(downloaded_file + ".2bit")
-		elif file_suffix == ".fa.gz":
+		elif file_suffix == ".fa.gz" or file_suffix == ".fna.gz":
 			# unzip gzip (to rezip with bgzip)
 			os.system("gunzip " + downloaded_file + file_suffix)
 

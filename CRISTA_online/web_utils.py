@@ -3,7 +3,7 @@ import string
 import subprocess, os
 import pandas as pd
 import regex as re
-
+import datetime
 
 def get_email_recipient(results_path):
 	if os.path.exists(results_path + "/user_email.txt"):
@@ -159,7 +159,14 @@ def is_csv(infile):
 		# Could not get a csv dialect -> probably not a csv.
 		return False
 
-
+def write_daily_test(program, run_number, status):
+	date = datetime.datetime.today().strftime('%d%m%Y')
+	DAILY_TESTS_DIR = '/bioseq/bioSequence_scripts_and_constants/daily_tests'
+	results_url = f'http://multicrispr.tau.ac.il/results.html?jobId={run_number}'
+	with open(os.path.join(DAILY_TESTS_DIR, f'{program}_{date}.txt'), "w") as f:
+		f.write(f'{status},{results_url}')
+	f.close()
+	
 if __name__ == '__main__':
 	make_new_results_page("", "", "", "")
 	add_table_to_html_results_page("/bioseq/data/results/crista/1487777465/", pd.read_csv("/bioseq/data/results/crista/1487777465/GAGTCCTAGCAGAAGAAGAANGG_CRISTA_offtargets_scores.csv"))

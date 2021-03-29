@@ -24,7 +24,7 @@ HG19_PATH = GENOMES_PATH + "hg19/human_g1k_v37.fasta.gz"
 N_GAPS = 3
 N_DISTEDIT = 4
 
-TEMP_LINE_PATTERN = "<b>{}:</b> <font style=\"color:#808080\"><i>the results file will be available for download once the execution is accomplished.</i></font>"
+TEMP_LINE_PATTERN = "<b>{}:</b> <font style=\"color:#808080\"><i>the results file will be available for download once the execution is completed.</i></font>"
 
 
 def make_html(sgseq_lst, create_html="0", results_path="", run_number="", running_mode="", running_params=""):
@@ -122,7 +122,7 @@ if __name__ == '__main__':
 	try:
 		web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
 		if args.sgseq is None:
-			sgseq_lst = re.sub(",+", " ", args.sgseq_lst.strip())
+			sgseq_lst = re.sub(",+", " ", args.sgseq_lst.strip().upper())
 			sgseq_lst = re.sub("\s+", " ", sgseq_lst.strip())
 			sgseq_lst = set(re.split(" ", sgseq_lst.strip()))
 			make_html(sgseq_lst, create_html, results_path=RESULTS_PATH, run_number=RUN_NUMBER,

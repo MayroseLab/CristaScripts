@@ -194,7 +194,7 @@ def run_bwa(sgRNA_seq, logger, genomic_db="hg19", n_gaps=N_GAPS,
 	return all_df, results_df
 
 
-def update_output_html(sgrna=None, output_df=None, logger=None):
+def update_output_html(sgrna=None, output_df=None, logger=None, isDailyTest=False):
 
 	filename = sgrna + "_CRISTA_offtargets_scores.csv"
 	output_df.to_csv(RESULTS_PATH + "/" + filename)
@@ -207,7 +207,13 @@ def update_output_html(sgrna=None, output_df=None, logger=None):
 					"" \
 					"</font></p>\n"
 	web_utils.add_to_results_html(RESULTS_PATH, html_addition)
-	web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	
+	#send email
+	if not isDailyTest:
+		web_utils.send_last_email(RECIPIENT, RUN_NUMBER, logger=logger)
+	else:
+		web_utils.write_daily_test('crista_find_offtargets', RUN_NUMBER, 'PASS')
+		
 
 
 if __name__ == '__main__':
@@ -219,7 +225,8 @@ if __name__ == '__main__':
 	parser.add_argument('--genome_database', '-g', default=None)
 	parser.add_argument('--path', '-p', default=None)
 	parser.add_argument('--run_number', '-n', default=None)
-
+	parser.add_argument('--daily_test', action='store_true')
+		
 	args = parser.parse_args()
 	global RESULTS_PATH
 	global RUN_NUMBER
@@ -229,21 +236,25 @@ if __name__ == '__main__':
 	genome_assembly = args.genome_database
 
 	try:
-		web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
-		sgrna_seq = args.sgseq.upper() + "NGG"
+		if not args.daily_test:
+			web_utils.send_first_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		sgrna_seq = re.sub("U", "T", args.sgseq.upper()) + "NGG"
 		all_df, results_df = run_bwa(sgrna_seq, logger=logger, genomic_db=genome_assembly)
 		if all_df is None:
 			set_error_message("Matches were not found in the selected genome reference.")
 			raise ValueError("Matches were not found in the selected genome reference.")
 		sort_dataframe_by_score(results_df)
-		update_output_html(sgrna_seq, all_df, logger)
+		update_output_html(sgrna_seq, all_df, logger, isDailyTest=args.daily_test)
 		convert_pos_cols_to_int(results_df)
 		web_utils.add_table_to_html_results_page(RESULTS_PATH, results_df)
 
 	except:
 		exc_type, exc_value, exc_traceback = sys.exc_info()
 		traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
-		web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger=logger)
+		if not args.daily_test: 
+			web_utils.send_error_email(RECIPIENT, RUN_NUMBER, logger)
+		else: 
+			web_utils.write_daily_test('crista_find_offtargets', RUN_NUMBER, 'FAIL')
 		web_utils.send_error_email("shiranos@gmail.com", RUN_NUMBER, logger)
 		web_utils.load_error_page(RESULTS_PATH, get_error_message())
 	web_utils.stop_refreshing(RESULTS_PATH)
